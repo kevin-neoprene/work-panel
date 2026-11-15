@@ -74,6 +74,17 @@ textarea{width:100%;min-height:130px;resize:vertical}
 .tool-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .import-label{display:inline-block;padding:9px 14px;border-radius:9px;background:#f3f4f6;cursor:pointer}
 
+/* 快捷入口：顶部卡片组，按分类分组，链接新标签页打开 */
+.quick-links{margin-bottom:16px}
+.quick-links h2{margin-bottom:12px}
+.quick-links .muted{margin:10px 0 0}
+.quick-groups{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.quick-group h3{font-size:13px;color:var(--muted);margin:0 0 8px;font-weight:600}
+.quick-card{display:block;background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-decoration:none;color:var(--text)}
+.quick-card:hover{border-color:var(--accent);background:var(--accent-light)}
+.quick-card b{display:block;font-size:15px}
+.quick-card span{display:block;font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:820px){.quick-groups{grid-template-columns:1fr}}
 /* 打印导出（PDF）用的打印区：平时隐藏，点“导出 PDF”时才显示 */
 #print-area{display:none}
 @media print{
