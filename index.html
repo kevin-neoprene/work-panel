@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作面板</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>工作面板</h1>
+      <p class="subtitle">待办、重点、番茄钟、速记和常用链接，都在这里。</p>
+    </div>
+    <div class="date" id="today"></div>
+  </header>
+
+  <p class="status" id="status">数据保存在 Supabase，换设备打开也会同步。</p>
+
+  <div class="stats">
+    <div class="stat"><b id="countTotal">0</b><span>全部待办</span></div>
+    <div class="stat"><b id="countDone">0</b><span>已完成</span></div>
+    <div class="stat"><b id="countStarred">0</b><span>今日重点</span></div>
+    <div class="stat"><b id="countRate">0%</b><span>完成率</span></div>
+  </div>
+
+  <div class="grid">
+    <main>
+      <section class="card">
+        <h2>⭐ 今日重点</h2>
+        <div id="starredList"><div class="empty">加载中……</div></div>
+      </section>
+
+      <section class="card">
+        <h2>待办事项</h2>
+        <div class="add-row">
+          <input type="text" id="newTitle" placeholder="输入待办，例如：准备周会汇报材料">
+          <select id="newPriority">
+            <option value="medium">中优先级</option>
+            <option value="high">高优先级</option>
+            <option value="low">低优先级</option>
+          </select>
+          <input type="date" id="newDue" aria-label="截止日期">
+          <button id="addBtn">添加</button>
+        </div>
+        <div class="filters">
+          <button class="ghost active" data-filter="all">全部</button>
+          <button class="ghost" data-filter="active">未完成</button>
+          <button class="ghost" data-filter="done">已完成</button>
+        </div>
+        <div id="taskList"><div class="empty">加载中……</div></div>
+      </section>
+    </main>
+
+    <aside>
+      <section class="card timer">
+        <h2>🍅 番茄钟</h2>
+        <div class="timer-display" id="timerDisplay">25:00</div>
+        <div class="timer-btns">
+          <button class="ghost active" data-minutes="25">25 分钟</button>
+          <button class="ghost" data-minutes="15">15 分钟</button>
+          <button class="ghost" data-minutes="5">5 分钟</button>
+        </div>
+        <div class="timer-btns" style="margin-top:10px">
+          <button id="timerToggle">开始</button>
+          <button class="ghost" id="timerReset">重置</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>📝 速记</h2>
+        <textarea id="notes" placeholder="随手记点什么，点保存会同步到 Supabase……"></textarea>
+        <div style="margin-top:10px;text-align:right"><button id="saveNotesBtn">保存速记</button></div>
+      </section>
+
+      <section class="card">
+        <h2>🔗 常用链接</h2>
+        <div class="add-row">
+          <input type="text" id="linkTitle" placeholder="名称">
+          <input type="text" id="linkUrl" placeholder="网址，如 github.com">
+          <button id="addLinkBtn">添加</button>
+        </div>
+        <div id="linkList" style="margin-top:8px"><div class="empty">加载中……</div></div>
+      </section>
+    </aside>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
