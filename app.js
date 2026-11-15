@@ -214,6 +214,10 @@ async function saveModule(mod) {
   const row = readForm(mod);
   if (!row[cfg.required]) { alert('请至少填写 ' + cfg.fields.find(f => f.k === cfg.required).label); return; }
   if (!hasKey) { alert('未配置 Supabase key，无法保存'); return; }
+  const saveBtn = document.querySelector('#form-' + mod + ' [data-save]');
+  const saveLabel = saveBtn ? saveBtn.textContent : '';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '保存中…'; }
+  setStatus('正在保存' + cfg.title + '，请稍候…');
   try {
     if (editing[mod]) {
       row.updated_at = new Date().toISOString();
@@ -228,7 +232,11 @@ async function saveModule(mod) {
     clearForm(mod);
     renderModule(mod);
     renderStats();
+    setStatus('已保存' + cfg.title + '。');
   } catch (e) { alert('保存失败：' + e.message); }
+  finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = saveLabel; }
+  }
 }
 async function deleteModule(mod, id) {
   const cfg = MODULES[mod];
@@ -557,13 +565,18 @@ async function addTask() {
   const due = document.getElementById('newDue').value || null;
   if (!title) { alert('请先输入待办内容'); return; }
   if (!hasKey) { alert('未配置 Supabase key，无法保存'); return; }
+  const addBtn = document.getElementById('addBtn');
+  addBtn.disabled = true; addBtn.textContent = '添加中…';
+  setStatus('正在添加待办，请稍候…');
   try {
     const inserted = await sbInsert('panel_tasks', { title, priority, due_date: due, done: false, starred: false });
     if (inserted && inserted[0]) state.tasks.unshift(inserted[0]);
     document.getElementById('newTitle').value = '';
     document.getElementById('newDue').value = '';
     renderTasks();
+    setStatus('待办已添加。');
   } catch (e) { alert('添加失败：' + e.message); }
+  finally { addBtn.disabled = false; addBtn.textContent = '添加'; }
 }
 async function updateTask(id, patch) {
   try {
