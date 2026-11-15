@@ -240,12 +240,13 @@ async function saveModule(mod) {
 }
 async function deleteModule(mod, id) {
   const cfg = MODULES[mod];
-  if (!confirm('确定删除这条' + cfg.title + '记录吗？')) return;
+  setStatus('正在删除' + cfg.title + '，请稍候…');
   try {
     await sbDelete(cfg.table, id);
     state[mod] = state[mod].filter(x => String(x.id) !== String(id));
     renderModule(mod);
     renderStats();
+    setStatus(cfg.title + '已删除。');
   } catch (e) { alert('删除失败：' + e.message); }
 }
 async function loadModule(mod) {
@@ -496,7 +497,14 @@ document.addEventListener('click', async e => {
     document.getElementById('form-' + mod).scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
-  if (t.dataset.modDel) { await deleteModule(t.dataset.modDel, t.dataset.id); return; }
+  if (t.dataset.modDel) {
+    if (t.textContent === '确认删除？') { await deleteModule(t.dataset.modDel, t.dataset.id); }
+    else {
+      t.textContent = '确认删除？';
+      setTimeout(() => { if (t.isConnected) t.textContent = '删除'; }, 3000);
+    }
+    return;
+  }
   if (t.dataset.export) { exportModule(t.dataset.export, t.dataset.format); return; }
   if (t.dataset.retry) { await loadModule(t.dataset.retry); return; }
 });
@@ -586,11 +594,12 @@ async function updateTask(id, patch) {
   } catch (e) { alert('保存失败：' + e.message); }
 }
 async function deleteTask(id) {
-  if (!confirm('确定删除这条待办吗？')) return;
+  setStatus('正在删除待办，请稍候…');
   try {
     await sbDelete('panel_tasks', id);
     state.tasks = state.tasks.filter(t => String(t.id) !== String(id));
     renderTasks();
+    setStatus('待办已删除。');
   } catch (e) { alert('删除失败：' + e.message); }
 }
 document.getElementById('addBtn').addEventListener('click', addTask);
@@ -604,7 +613,13 @@ document.getElementById('taskList').addEventListener('click', async e => {
   const t = e.target;
   if (t.dataset.toggle) { const task = state.tasks.find(x => String(x.id) === t.dataset.toggle); await updateTask(task.id, { done: !task.done }); }
   if (t.dataset.star) { const task = state.tasks.find(x => String(x.id) === t.dataset.star); await updateTask(task.id, { starred: !task.starred }); }
-  if (t.dataset.del) await deleteTask(t.dataset.del);
+  if (t.dataset.del) {
+    if (t.textContent === '确认删除？') { await deleteTask(t.dataset.del); }
+    else {
+      t.textContent = '确认删除？';
+      setTimeout(() => { if (t.isConnected) t.textContent = '删除'; }, 3000);
+    }
+  }
   if (t.dataset.edit) { editingId = t.dataset.edit; renderTasks(); }
   if (t.dataset.cancelEdit) { editingId = null; renderTasks(); }
   if (t.dataset.saveEdit) {
