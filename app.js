@@ -96,7 +96,45 @@ function renderStats() {
   const done = state.tasks.filter(t => t.done).length;
   document.getElementById('countTotal').textContent = total;
   document.getElementById('countStarred').textContent = state.tasks.filter(t => t.starred && !t.done).length;
+  // 今天必办 = 未完成待办里“已逾期 + 今天到期”的条数
+  document.getElementById('statTodayMust').textContent =
+    state.tasks.filter(t => !t.done && (taskTimeGroup(t) === 'overdue' || taskTimeGroup(t) === 'today')).length;
 }
+
+// ---------- 时间分组（本地日期，避免 UTC 时区差一天） ----------
+// 日期一律按本地年月日比较：due_date 是 YYYY-MM-DD，按本地时区解析成午夜，
+// 与本地今天相减得到天数差。不要用 new Date('YYYY-MM-DD')（按 UTC 解析会差一天）。
+function localDayStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function todayStr() { return localDayStr(new Date()); }
+function dayDiff(dateStr, refStr) {
+  const p = String(dateStr).slice(0, 10).split('-').map(Number);
+  const r = String(refStr).slice(0, 10).split('-').map(Number);
+  const a = new Date(p[0], p[1] - 1, p[2]);
+  const b = new Date(r[0], r[1] - 1, r[2]);
+  return Math.round((a - b) / 86400000);
+}
+function taskTimeGroup(t) {
+  if (!t.due_date) return 'none';
+  const d = dayDiff(t.due_date, todayStr());
+  if (d < 0) return 'overdue';
+  if (d === 0) return 'today';
+  if (d === 1) return 'tomorrow';
+  return 'later';
+}
+function overdueDays(t) {
+  if (!t.due_date) return 0;
+  const d = dayDiff(t.due_date, todayStr());
+  return d < 0 ? -d : 0;
+}
+const TIME_GROUPS = [
+  { key: 'overdue', icon: '🔴', label: '已逾期' },
+  { key: 'today', icon: '🟡', label: '今天到期' },
+  { key: 'tomorrow', icon: '🔵', label: '明天到期' },
+  { key: 'later', icon: '⚪', label: '以后到期' },
+  { key: 'none', icon: '⚪', label: '无截止日期' }
+];
 
 // ---------- 状态与模块配置 ----------
 const state = { tasks: [], links: [], inquiries: [], suppliers: [], seo: [], orders: [], shipments: [] };
@@ -175,8 +213,19 @@ function renderModule(mod) {
   if (!rows.length) { el.innerHTML = '<div class="empty">暂无记录，先在上面添加一条吧。</div>'; return; }
   el.innerHTML = rows.map(r => {
     const main = cfg.fields.slice(0, 3).map(f => '<b>' + esc(f.date ? fmtDate(r[f.k]) : r[f.k]) + '</b>').join(' · ');
-    const meta = cfg.fields.map(f =>
-      '<span><i>' + esc(f.label) + '</i> ' + esc(f.date ? fmtDate(r[f.k]) : (r[f.k] ?? '')) + '</span>').join('');
+    const meta = cfg.fields.map(f => {
+      const val = f.date ? fmtDate(r[f.k]) : (r[f.k] ?? '');
+      // 询盘逾期提醒：inquiry_date 早于今天、且未成交/未丢单的，日期标红并加“已逾期 N 天”
+      if (mod === 'inquiries' && f.k === 'inquiry_date' && r.inquiry_date) {
+        const d = dayDiff(r.inquiry_date, todayStr());
+        const closed = r.status === '已成交' || r.status === '已丢单';
+        if (d < 0 && !closed) {
+          return '<span><i>' + esc(f.label) + '</i> <span class="overdue-text">' + esc(val) + '</span>' +
+            ' <span class="overdue-badge">已逾期 ' + (-d) + ' 天</span></span>';
+        }
+      }
+      return '<span><i>' + esc(f.label) + '</i> ' + esc(val) + '</span>';
+    }).join('');
     return '<div class="mod-row">' +
       '<div class="mod-main"><div class="mod-title">' + main + '</div><div class="mod-meta">' + meta + '</div></div>' +
       '<div class="task-actions">' +
@@ -316,10 +365,11 @@ function setStatus(msg, isError) {
 }
 
 // 每个可导出模块的导出规格：标题 + 列定义（label + 取值函数）+ 当前筛选后的行。
-// 待办按当前筛选（全部/未完成/已完成），业务模块按当前搜索+状态筛选导出。
+// 待办按当前筛选（全部/未完成/今天必办/已完成），业务模块按当前搜索+状态筛选导出。
 function filteredTasks() {
   if (tasksFilter === 'active') return state.tasks.filter(t => !t.done);
   if (tasksFilter === 'done') return state.tasks.filter(t => t.done);
+  if (tasksFilter === 'todayMust') return state.tasks.filter(t => !t.done && (taskTimeGroup(t) === 'overdue' || taskTimeGroup(t) === 'today'));
   return state.tasks.slice();
 }
 function exportSpec(key) {
@@ -519,25 +569,17 @@ document.addEventListener('click', async e => {
 let tasksFilter = 'all';
 let editingId = null;
 function priorityLabel(p) { return p === 'high' ? '高' : p === 'low' ? '低' : '中'; }
-function renderTasks() {
-  renderStats();
-  const tasks = state.tasks;
-  const starredList = tasks.filter(t => t.starred && !t.done);
-  document.getElementById('starredList').innerHTML = starredList.length
-    ? starredList.map(t => '<div class="task"><span class="task-main"><span class="task-title">' + esc(t.title) + '</span><span class="task-meta"><span class="pill ' + t.priority + '">' + priorityLabel(t.priority) + '优先级</span>' + (t.due_date ? '<span>截止 ' + esc(t.due_date) + '</span>' : '') + '</span></span></div>').join('')
-    : '<div class="empty">还没有今日重点，点击任务旁的 ★ 即可置顶到这里。</div>';
-  let list = tasks;
-  if (tasksFilter === 'active') list = tasks.filter(t => !t.done);
-  if (tasksFilter === 'done') list = tasks.filter(t => t.done);
-  document.getElementById('taskList').innerHTML = list.length
-    ? list.map(t => `
+function taskRowHtml(t) {
+  const od = overdueDays(t);
+  return `
       <div class="task ${t.done ? 'done' : ''}">
         <input type="checkbox" ${t.done ? 'checked' : ''} data-toggle="${t.id}" aria-label="完成">
         <div class="task-main">
           <div class="task-title">${esc(t.title)}</div>
           <div class="task-meta">
             <span class="pill ${t.priority}">${priorityLabel(t.priority)}优先级</span>
-            ${t.due_date ? `<span>截止 ${esc(t.due_date)}</span>` : ''}
+            ${t.due_date ? `<span class="${od ? 'overdue-text' : ''}">截止 ${esc(t.due_date)}</span>` : ''}
+            ${od ? `<span class="overdue-badge">逾期 ${od} 天</span>` : ''}
             <span>${t.created_at ? new Date(t.created_at).toLocaleDateString('zh-CN') : ''}</span>
           </div>
           ${editingId === String(t.id) ? `
@@ -552,8 +594,36 @@ function renderTasks() {
           <button class="small ghost" data-edit="${t.id}">编辑</button>
           <button class="small danger" data-del="${t.id}">删除</button>
         </div>
-      </div>`).join('')
-    : '<div class="empty">暂无待办，先添加一个吧。</div>';
+      </div>`;
+}
+function renderTasks() {
+  renderStats();
+  const tasks = state.tasks;
+  const starredList = tasks.filter(t => t.starred && !t.done);
+  document.getElementById('starredList').innerHTML = starredList.length
+    ? starredList.map(t => '<div class="task"><span class="task-main"><span class="task-title">' + esc(t.title) + '</span><span class="task-meta"><span class="pill ' + t.priority + '">' + priorityLabel(t.priority) + '优先级</span>' + (t.due_date ? '<span>截止 ' + esc(t.due_date) + '</span>' : '') + (overdueDays(t) ? '<span class="overdue-badge">逾期 ' + overdueDays(t) + ' 天</span>' : '') + '</span></span></div>').join('')
+    : '<div class="empty">还没有今日重点，点击任务旁的 ★ 即可置顶到这里。</div>';
+  let list = tasks;
+  if (tasksFilter === 'active') list = tasks.filter(t => !t.done);
+  if (tasksFilter === 'done') list = tasks.filter(t => t.done);
+  if (tasksFilter === 'todayMust') list = tasks.filter(t => !t.done && (taskTimeGroup(t) === 'overdue' || taskTimeGroup(t) === 'today'));
+  const el = document.getElementById('taskList');
+  if (!list.length) { el.innerHTML = '<div class="empty">暂无待办，先添加一个吧。</div>'; return; }
+  // 已完成的保持原样平铺；未完成按时间分组，组内按截止日期从早到晚排，无日期的保持原顺序
+  if (tasksFilter === 'done') { el.innerHTML = list.map(taskRowHtml).join(''); return; }
+  const groups = TIME_GROUPS.map(g => ({
+    key: g.key, icon: g.icon, label: g.label,
+    rows: list.filter(t => taskTimeGroup(t) === g.key).sort((a, b) => {
+      if (!a.due_date || !b.due_date) return 0;
+      return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0;
+    })
+  })).filter(g => g.rows.length);
+  el.innerHTML = groups.map(g =>
+    '<div class="time-group' + (g.key === 'overdue' ? ' overdue' : '') + '">' +
+    '<h3 class="time-group-title">' + g.icon + ' ' + g.label + '（' + g.rows.length + '）</h3>' +
+    g.rows.map(taskRowHtml).join('') +
+    '</div>'
+  ).join('');
 }
 async function loadTasks() {
   try {
@@ -609,6 +679,15 @@ document.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('clic
   document.querySelectorAll('[data-filter]').forEach(x => x.classList.toggle('active', x === b));
   renderTasks();
 }));
+// 顶部“今天必办”数字可点：跳到待办标签页并只看已逾期 + 今天到期
+document.getElementById('statTodayMustCard').addEventListener('click', () => {
+  tasksFilter = 'todayMust';
+  document.querySelectorAll('[data-filter]').forEach(x => x.classList.toggle('active', x.dataset.filter === 'todayMust'));
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === 'tasks'));
+  document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('active', p.id === 'pane-tasks'));
+  renderTasks();
+  document.getElementById('pane-tasks').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 document.getElementById('taskList').addEventListener('click', async e => {
   const t = e.target;
   if (t.dataset.toggle) { const task = state.tasks.find(x => String(x.id) === t.dataset.toggle); await updateTask(task.id, { done: !task.done }); }
