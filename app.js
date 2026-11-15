@@ -254,13 +254,222 @@ async function loadModule(mod) {
   renderStats();
 }
 
+// ---------- 导出：CSV / Excel(.xlsx) / PDF（打印保存）/ Word(.doc) ----------
+// 设计：页面加载时不引入任何外部 JS 库。点“导出 Excel”时才按需（lazy）加载
+// SheetJS；加载失败则自动改用 .xls 表格版（Excel 可直接打开），按钮永不落空。
+// PDF 不用重型库：生成打印版表格 + window.print()，用户在打印对话框选
+// “另存为 PDF”即可保存为 PDF（A4 横向），按钮如实标注“导出 PDF（打印保存）”。
+// Word 用 HTML 表格生成 .doc，Word 原生支持打开，UTF-8 编码中文不乱码。
+
+// 纯函数（不碰 DOM，可被 Node 测试抽取验证），起止标记供测试脚本定位：
+// __PURE_EXPORT_HELPERS_START__
+function tableHtml(columns, rows) {
+  const head = '<thead><tr>' + columns.map(c => '<th>' + esc(c.label) + '</th>').join('') + '</tr></thead>';
+  const body = '<tbody>' + rows.map(r =>
+    '<tr>' + columns.map(c => '<td>' + esc(String(c.value(r) ?? '')) + '</td>').join('') + '</tr>').join('') + '</tbody>';
+  return '<table>' + head + body + '</table>';
+}
+function buildDocHtml(title, sections) {
+  const parts = sections.map(s => '<h2>' + esc(s.heading) + '</h2>' +
+    (s.rows.length ? tableHtml(s.columns, s.rows) : '<p>暂无记录</p>')).join('');
+  return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>table{border-collapse:collapse}th,td{border:1px solid #999;padding:4px 8px;text-align:left}h1{font-size:18px}h2{font-size:15px}</style></head><body><h1>' + esc(title) + '</h1><p>导出时间：' + esc(new Date().toLocaleString('zh-CN')) + '</p>' + parts + '</body></html>';
+}
+function buildXlsHtml(title, sections) {
+  const parts = sections.map(s => '<h2>' + esc(s.heading) + '</h2>' +
+    (s.rows.length ? tableHtml(s.columns, s.rows) : '<p>暂无记录</p>')).join('');
+  return '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><title>' + esc(title) + '</title></head><body><h1>' + esc(title) + '</h1>' + parts + '</body></html>';
+}
+function buildCsvText(columns, rows) {
+  const head = columns.map(c => csvEscape(c.label)).join(',');
+  const lines = rows.map(r => columns.map(c => csvEscape(c.value(r))).join(','));
+  return '\ufeff' + [head].concat(lines).join('\n');
+}
+function rowsToAoa(columns, rows) {
+  return [columns.map(c => c.label)].concat(rows.map(r => columns.map(c => c.value(r))));
+}
+function sheetName(name) {
+  return String(name).replace(/[\\/?*\[\]:]/g, '').slice(0, 31) || 'Sheet1';
+}
+function fileDate() { return new Date().toISOString().slice(0, 10); }
+// __PURE_EXPORT_HELPERS_END__
+
+function downloadBlob(filename, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle('error', !!isError);
+}
+
+// 每个可导出模块的导出规格：标题 + 列定义（label + 取值函数）+ 当前筛选后的行。
+// 待办按当前筛选（全部/未完成/已完成），业务模块按当前搜索+状态筛选导出。
+function filteredTasks() {
+  if (tasksFilter === 'active') return state.tasks.filter(t => !t.done);
+  if (tasksFilter === 'done') return state.tasks.filter(t => t.done);
+  return state.tasks.slice();
+}
+function exportSpec(key) {
+  if (key === 'tasks') {
+    return {
+      title: '待办', columns: [
+        { label: '待办内容', value: r => r.title || '' },
+        { label: '优先级', value: r => priorityLabel(r.priority) },
+        { label: '截止日期', value: r => fmtDate(r.due_date) },
+        { label: '完成状态', value: r => r.done ? '已完成' : '未完成' },
+        { label: '今日重点', value: r => r.starred ? '是' : '否' },
+        { label: '创建日期', value: r => r.created_at ? fmtDate(r.created_at) : '' }
+      ], rows: filteredTasks()
+    };
+  }
+  if (key === 'links') {
+    return {
+      title: '常用链接', columns: [
+        { label: '名称', value: r => r.title || '' },
+        { label: '网址', value: r => r.url || '' },
+        { label: '创建日期', value: r => r.created_at ? fmtDate(r.created_at) : '' }
+      ], rows: state.links.slice()
+    };
+  }
+  if (key === 'notes') {
+    return {
+      title: '速记', columns: [
+        { label: '内容', value: r => r.content || '' },
+        { label: '更新日期', value: r => r.updated_at ? fmtDate(r.updated_at) : '' }
+      ], rows: [{ content: document.getElementById('notes').value, updated_at: new Date().toISOString() }]
+    };
+  }
+  const cfg = MODULES[key];
+  return {
+    title: cfg.title, columns: cfg.fields.map(f => ({
+      label: f.label, value: r => f.date ? fmtDate(r[f.k]) : String(r[f.k] ?? '')
+    })), rows: moduleRows(key)
+  };
+}
+
 // 导出 CSV（带 UTF-8 BOM，Excel 打开中文不乱码）
 function exportModuleCsv(mod) {
-  const cfg = MODULES[mod];
-  const rows = moduleRows(mod);
-  const head = cfg.fields.map(f => csvEscape(f.label)).join(',');
-  const lines = rows.map(r => cfg.fields.map(f => csvEscape(f.date ? fmtDate(r[f.k]) : (r[f.k] ?? ''))).join(','));
-  download(cfg.title + '-' + new Date().toISOString().slice(0, 10) + '.csv', '﻿' + [head].concat(lines).join('\n'), 'text/csv;charset=utf-8');
+  const spec = exportSpec(mod);
+  download(spec.title + '-' + fileDate() + '.csv', buildCsvText(spec.columns, spec.rows), 'text/csv;charset=utf-8');
+  setStatus('已导出 CSV：' + spec.title + '，共 ' + spec.rows.length + ' 条。');
+}
+
+// 导出 .xls 表格版（HTML 表格存为 .xls，Excel 可直接打开；也是 Excel 组件加载失败时的兜底）
+function exportToXls(key) {
+  const spec = exportSpec(key);
+  const html = buildXlsHtml('工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
+  downloadBlob(spec.title + '-' + fileDate() + '.xls', new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' }));
+  setStatus('已导出 .xls 表格版：' + spec.title + '（Excel 可直接打开），共 ' + spec.rows.length + ' 条。');
+}
+
+// 按需加载 SheetJS（只在点“导出 Excel”时加载一次，页面打开时不加载，不阻塞首屏）
+let xlsxLoadPromise = null;
+function loadXlsxLib() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxLoadPromise) return xlsxLoadPromise;
+  xlsxLoadPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.async = true;
+    let done = false;
+    const fail = err => { if (done) return; done = true; s.remove(); xlsxLoadPromise = null; reject(err); };
+    const timer = setTimeout(() => fail(new Error('加载 Excel 组件超时（15 秒），请检查网络后重试')), 15000);
+    s.onload = () => {
+      if (done) return; done = true; clearTimeout(timer);
+      window.XLSX ? resolve(window.XLSX) : fail(new Error('Excel 组件加载失败'));
+    };
+    s.onerror = () => fail(new Error('Excel 组件加载失败，请检查网络后重试'));
+    document.head.appendChild(s);
+  });
+  return xlsxLoadPromise;
+}
+
+// 导出真正的 .xlsx（SheetJS 生成）；CDN 加载失败时自动改用 .xls 表格版
+async function exportToXlsx(key) {
+  const spec = exportSpec(key);
+  try {
+    const XLSX = await loadXlsxLib();
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rowsToAoa(spec.columns, spec.rows)), sheetName(spec.title));
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    downloadBlob(spec.title + '-' + fileDate() + '.xlsx', new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    setStatus('已导出 Excel（.xlsx）：' + spec.title + '，共 ' + spec.rows.length + ' 条。');
+  } catch (e) {
+    setStatus('Excel 组件加载失败（' + e.message + '），已自动改为下载 .xls 表格版，Excel 可直接打开。', true);
+    exportToXls(key);
+  }
+}
+
+// 导出 Word（.doc，HTML 表格，Word 原生支持打开，UTF-8 中文不乱码）
+function exportToDoc(key) {
+  const spec = exportSpec(key);
+  const html = buildDocHtml('工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
+  downloadBlob(spec.title + '-' + fileDate() + '.doc', new Blob(['\ufeff' + html], { type: 'application/msword;charset=utf-8' }));
+  setStatus('已导出 Word（.doc）：' + spec.title + '，共 ' + spec.rows.length + ' 条。');
+}
+
+// 导出 PDF：生成打印版表格，打开浏览器打印对话框，选“另存为 PDF”即可保存（A4 横向）
+function printSections(title, sections) {
+  const area = document.getElementById('print-area');
+  area.innerHTML = '<h1>' + esc(title) + '</h1><p class="print-meta">导出时间：' + esc(new Date().toLocaleString('zh-CN')) + '　·　在打印对话框中选择“另存为 PDF”即可保存为 PDF 文件</p>' +
+    sections.map(s => '<h2>' + esc(s.heading) + '</h2>' +
+      (s.rows.length ? tableHtml(s.columns, s.rows) : '<p>暂无记录</p>')).join('');
+  document.body.classList.add('printing');
+  const cleanup = () => { document.body.classList.remove('printing'); area.innerHTML = ''; window.removeEventListener('afterprint', cleanup); };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(cleanup, 30000); // 兜底：个别浏览器不触发 afterprint 时 30 秒后恢复页面
+  window.print();
+}
+function exportToPdf(key) {
+  const spec = exportSpec(key);
+  printSections('工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
+}
+
+// 按格式分发单个模块的导出（format 为空时默认 CSV，兼容旧的 data-export 用法）
+function exportModule(mod, format) {
+  if (format === 'xlsx') return exportToXlsx(mod);
+  if (format === 'pdf') return exportToPdf(mod);
+  if (format === 'doc') return exportToDoc(mod);
+  return exportModuleCsv(mod);
+}
+
+// 全部模块的导出规格（工具页“导出全部”用，顺序与标签页一致）
+function allExportSpecs() {
+  return ['tasks', 'inquiries', 'suppliers', 'seo', 'orders', 'shipments', 'links', 'notes'].map(exportSpec);
+}
+// 全部数据导出一个 .xlsx 工作簿（每模块一个工作表）；CDN 失败时改用 .xls 表格版
+async function exportAllXlsx() {
+  const specs = allExportSpecs();
+  try {
+    const XLSX = await loadXlsxLib();
+    const wb = XLSX.utils.book_new();
+    specs.forEach(spec => {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rowsToAoa(spec.columns, spec.rows)), sheetName(spec.title));
+    });
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    downloadBlob('work-panel-全部数据-' + fileDate() + '.xlsx', new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    setStatus('已导出全部数据 Excel（.xlsx），共 ' + specs.length + ' 个工作表。');
+  } catch (e) {
+    setStatus('Excel 组件加载失败（' + e.message + '），已自动改为下载全部数据 .xls 表格版，Excel 可直接打开。', true);
+    const html = buildXlsHtml('工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
+    downloadBlob('work-panel-全部数据-' + fileDate() + '.xls', new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' }));
+  }
+}
+// 全部数据导出一个 Word（.doc），每模块一段表格
+function exportAllDoc() {
+  const specs = allExportSpecs();
+  const html = buildDocHtml('工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
+  downloadBlob('work-panel-全部数据-' + fileDate() + '.doc', new Blob(['\ufeff' + html], { type: 'application/msword;charset=utf-8' }));
+  setStatus('已导出全部数据 Word（.doc），共 ' + specs.length + ' 个模块。');
+}
+// 全部数据导出 PDF（打印保存）：一次打印全部模块的表格
+function exportAllPdf() {
+  const specs = allExportSpecs();
+  printSections('工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
 }
 
 // 全局事件委托：模块的保存 / 取消 / 编辑 / 删除 / 导出 / 重试 / 搜索 / 筛选
@@ -280,7 +489,7 @@ document.addEventListener('click', async e => {
     return;
   }
   if (t.dataset.modDel) { await deleteModule(t.dataset.modDel, t.dataset.id); return; }
-  if (t.dataset.export) { exportModuleCsv(t.dataset.export); return; }
+  if (t.dataset.export) { exportModule(t.dataset.export, t.dataset.format); return; }
   if (t.dataset.retry) { await loadModule(t.dataset.retry); return; }
 });
 ['inquiries', 'suppliers', 'seo', 'orders', 'shipments'].forEach(mod => {
@@ -512,8 +721,11 @@ document.getElementById('exportJsonBtn').addEventListener('click', async () => {
     JSON.stringify(backup, null, 2), 'application/json;charset=utf-8');
 });
 document.getElementById('exportAllCsvBtn').addEventListener('click', () => {
-  Object.keys(MODULES).forEach(exportModuleCsv);
+  ['tasks', 'inquiries', 'suppliers', 'seo', 'orders', 'shipments', 'links'].forEach(exportModuleCsv);
 });
+document.getElementById('exportAllXlsxBtn').addEventListener('click', exportAllXlsx);
+document.getElementById('exportAllPdfBtn').addEventListener('click', exportAllPdf);
+document.getElementById('exportAllDocBtn').addEventListener('click', exportAllDoc);
 document.getElementById('importJsonFile').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;

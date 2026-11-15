@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>工作面板</title>
 <link rel="stylesheet" href="style.css">
-<!-- v2: 不再依赖任何外部 JS 库，Supabase 用 fetch 直调 REST API，避免 CDN 卡住 -->
+<!-- v2: 页面加载不依赖任何外部 JS 库，Supabase 用 fetch 直调 REST API，避免 CDN 卡住 -->
+<!-- 导出 Excel 时才按需加载 SheetJS（点按钮后才加载，失败自动改用 .xls 表格版） -->
 </head>
 <body>
 <div class="wrap">
@@ -58,6 +59,13 @@
       <button class="ghost" data-filter="active">未完成</button>
       <button class="ghost" data-filter="done">已完成</button>
     </div>
+    <div class="toolbar export-bar">
+      <span class="muted">导出待办：</span>
+      <button class="ghost" data-export="tasks" data-format="csv">导出 CSV</button>
+      <button class="ghost" data-export="tasks" data-format="xlsx">导出 Excel</button>
+      <button class="ghost" data-export="tasks" data-format="pdf">导出 PDF（打印保存）</button>
+      <button class="ghost" data-export="tasks" data-format="doc">导出 Word</button>
+    </div>
     <div id="taskList"><div class="empty">加载中……</div></div>
   </section>
 
@@ -68,6 +76,9 @@
       <input type="search" id="search-inquiries" placeholder="搜索客人 / 产品…">
       <select id="filter-inquiries"><option value="">全部状态</option><option>待报价</option><option>已报价</option><option>跟进中</option><option>已成交</option><option>已丢单</option></select>
       <button class="ghost" data-export="inquiries">导出 CSV</button>
+      <button class="ghost" data-export="inquiries" data-format="xlsx">导出 Excel</button>
+      <button class="ghost" data-export="inquiries" data-format="pdf">导出 PDF（打印保存）</button>
+      <button class="ghost" data-export="inquiries" data-format="doc">导出 Word</button>
     </div>
     <div class="add-row form-grid" id="form-inquiries">
       <input type="text" data-f="customer" placeholder="客人姓名 / 公司 *">
@@ -88,6 +99,9 @@
     <div class="toolbar">
       <input type="search" id="search-suppliers" placeholder="搜索供应商 / 产品…">
       <button class="ghost" data-export="suppliers">导出 CSV</button>
+      <button class="ghost" data-export="suppliers" data-format="xlsx">导出 Excel</button>
+      <button class="ghost" data-export="suppliers" data-format="pdf">导出 PDF（打印保存）</button>
+      <button class="ghost" data-export="suppliers" data-format="doc">导出 Word</button>
     </div>
     <div class="add-row form-grid" id="form-suppliers">
       <input type="text" data-f="name" placeholder="供应商名 *">
@@ -109,6 +123,9 @@
       <input type="search" id="search-seo" placeholder="搜索关键词 / 页面…">
       <select id="filter-seo"><option value="">全部状态</option><option>待写</option><option>写作中</option><option>已发布</option><option>已收录</option></select>
       <button class="ghost" data-export="seo">导出 CSV</button>
+      <button class="ghost" data-export="seo" data-format="xlsx">导出 Excel</button>
+      <button class="ghost" data-export="seo" data-format="pdf">导出 PDF（打印保存）</button>
+      <button class="ghost" data-export="seo" data-format="doc">导出 Word</button>
     </div>
     <div class="add-row form-grid" id="form-seo">
       <input type="text" data-f="keyword" placeholder="关键词 *">
@@ -130,6 +147,9 @@
       <input type="search" id="search-orders" placeholder="搜索订单号 / 客人 / PI 号…">
       <select id="filter-orders"><option value="">全部付款状态</option><option>未付</option><option>定金</option><option>已付清</option></select>
       <button class="ghost" data-export="orders">导出 CSV</button>
+      <button class="ghost" data-export="orders" data-format="xlsx">导出 Excel</button>
+      <button class="ghost" data-export="orders" data-format="pdf">导出 PDF（打印保存）</button>
+      <button class="ghost" data-export="orders" data-format="doc">导出 Word</button>
     </div>
     <div class="add-row form-grid" id="form-orders">
       <input type="text" data-f="order_no" placeholder="订单号 *">
@@ -154,6 +174,9 @@
       <input type="search" id="search-shipments" placeholder="搜索客人 / 订单号 / 快递单号…">
       <select id="filter-shipments"><option value="">全部状态</option><option>已发货</option><option>运输中</option><option>已签收</option></select>
       <button class="ghost" data-export="shipments">导出 CSV</button>
+      <button class="ghost" data-export="shipments" data-format="xlsx">导出 Excel</button>
+      <button class="ghost" data-export="shipments" data-format="pdf">导出 PDF（打印保存）</button>
+      <button class="ghost" data-export="shipments" data-format="doc">导出 Word</button>
     </div>
     <div class="add-row form-grid" id="form-shipments">
       <input type="text" data-f="customer" placeholder="客人 *">
@@ -175,11 +198,14 @@
     <div class="tool-row">
       <button id="exportJsonBtn">备份全部数据（导出 JSON）</button>
       <button class="ghost" id="exportAllCsvBtn">导出全部模块 CSV</button>
+      <button class="ghost" id="exportAllXlsxBtn">导出全部 Excel (.xlsx)</button>
+      <button class="ghost" id="exportAllPdfBtn">导出全部 PDF（打印保存）</button>
+      <button class="ghost" id="exportAllDocBtn">导出全部 Word (.doc)</button>
       <label class="import-label">导入 JSON 备份
         <input type="file" id="importJsonFile" accept="application/json" class="hidden">
       </label>
     </div>
-    <p class="muted">JSON 备份包含全部 8 张表的数据；导入时会按表逐条新增（不覆盖、不删除已有数据）。每个模块页面上方也有单独的「导出 CSV」按钮，CSV 带 UTF-8 BOM，Excel 打开中文不会乱码。</p>
+    <p class="muted">JSON 备份包含全部 8 张表的数据；导入时会按表逐条新增（不覆盖、不删除已有数据）。每个模块都有 CSV / Excel（.xlsx 真表格）/ PDF（打印保存）/ Word（.doc）四种导出：Excel 点按钮时才按需加载组件，加载失败会自动改下 .xls 表格版；PDF 会打开打印对话框，在里面选“另存为 PDF”即可保存（A4 横向）。导出只导出当前搜索 / 筛选后显示的记录。</p>
 
     <div class="grid" style="margin-top:16px">
       <div>
@@ -208,10 +234,19 @@
           <button id="addLinkBtn">添加</button>
         </div>
         <div id="linkList" style="margin-top:8px"><div class="empty">加载中……</div></div>
+        <div class="toolbar export-bar" style="margin-top:8px">
+          <span class="muted">导出常用链接：</span>
+          <button class="ghost" data-export="links" data-format="csv">导出 CSV</button>
+          <button class="ghost" data-export="links" data-format="xlsx">导出 Excel</button>
+          <button class="ghost" data-export="links" data-format="pdf">导出 PDF（打印保存）</button>
+          <button class="ghost" data-export="links" data-format="doc">导出 Word</button>
+        </div>
       </div>
     </div>
   </section>
 </div>
+<!-- 打印导出（PDF）用的打印区：平时隐藏，点“导出 PDF”时填入表格并打开打印对话框 -->
+<div id="print-area" aria-hidden="true"></div>
 <script src="app.js"></script>
 </body>
 </html>

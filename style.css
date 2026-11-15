@@ -38,6 +38,8 @@ button.danger{background:#fee2e2;color:var(--red)}
 button.small{padding:5px 9px;font-size:13px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .toolbar input[type=search]{flex:1;min-width:180px}
+.export-bar{align-items:center;margin-top:4px}
+.export-bar .muted{margin-right:2px}
 .filters{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}
 .filters button.active{background:var(--text)}
 .task{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--border)}
@@ -71,3 +73,19 @@ textarea{width:100%;min-height:130px;resize:vertical}
 .mod-meta i{font-style:normal;color:#9ca3af;margin-right:2px}
 .tool-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .import-label{display:inline-block;padding:9px 14px;border-radius:9px;background:#f3f4f6;cursor:pointer}
+
+/* 打印导出（PDF）用的打印区：平时隐藏，点“导出 PDF”时才显示 */
+#print-area{display:none}
+@media print{
+  @page{size:A4 landscape;margin:12mm}
+  body.printing .wrap{display:none!important}
+  body.printing #print-area{display:block!important;color:#000}
+  #print-area h1{font-size:18px;margin:0 0 6px}
+  #print-area h2{font-size:14px;margin:14px 0 6px}
+  #print-area .print-meta{font-size:11px;color:#666;margin:0 0 8px}
+  #print-area p{font-size:12px}
+  #print-area table{width:100%;border-collapse:collapse;font-size:11px}
+  #print-area th,#print-area td{border:1px solid #999;padding:4px 6px;text-align:left;word-break:break-all}
+  #print-area thead{display:table-header-group}
+  #print-area tr{page-break-inside:avoid}
+}
