@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>工作面板</title>
 <link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- v2: 不再依赖任何外部 JS 库，Supabase 用 fetch 直调 REST API，避免 CDN 卡住 -->
 </head>
 <body>
 <div class="wrap">
   <header>
     <div>
       <h1>工作面板</h1>
-      <p class="subtitle">待办、重点、番茄钟、速记和常用链接，都在这里。</p>
+      <p class="subtitle">询盘、供应商、SEO、订单 / PI、发货、待办，都在这里。</p>
     </div>
     <div class="date" id="today"></div>
   </header>
@@ -20,72 +20,197 @@
   <p class="status" id="status">数据保存在 Supabase，换设备打开也会同步。</p>
 
   <div class="stats">
+    <div class="stat"><b id="statInquiries">0</b><span>待跟进询盘</span></div>
+    <div class="stat"><b id="statOrders">0</b><span>待处理订单</span></div>
+    <div class="stat"><b id="statShipments">0</b><span>待发货 / 在途</span></div>
+    <div class="stat"><b id="statSeo">0</b><span>SEO 待发布</span></div>
     <div class="stat"><b id="countTotal">0</b><span>全部待办</span></div>
-    <div class="stat"><b id="countDone">0</b><span>已完成</span></div>
     <div class="stat"><b id="countStarred">0</b><span>今日重点</span></div>
-    <div class="stat"><b id="countRate">0%</b><span>完成率</span></div>
   </div>
 
-  <div class="grid">
-    <main>
-      <section class="card">
-        <h2>⭐ 今日重点</h2>
-        <div id="starredList"><div class="empty">加载中……</div></div>
-      </section>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="tasks">📋 待办</button>
+    <button class="tab" data-tab="inquiries">💬 询盘</button>
+    <button class="tab" data-tab="suppliers">🏭 供应商</button>
+    <button class="tab" data-tab="seo">🔍 SEO 进度</button>
+    <button class="tab" data-tab="orders">🧾 订单 / PI</button>
+    <button class="tab" data-tab="shipments">📦 发货</button>
+    <button class="tab" data-tab="tools">🛠 工具</button>
+  </nav>
 
-      <section class="card">
-        <h2>待办事项</h2>
-        <div class="add-row">
-          <input type="text" id="newTitle" placeholder="输入待办，例如：准备周会汇报材料">
-          <select id="newPriority">
-            <option value="medium">中优先级</option>
-            <option value="high">高优先级</option>
-            <option value="low">低优先级</option>
-          </select>
-          <input type="date" id="newDue" aria-label="截止日期">
-          <button id="addBtn">添加</button>
-        </div>
-        <div class="filters">
-          <button class="ghost active" data-filter="all">全部</button>
-          <button class="ghost" data-filter="active">未完成</button>
-          <button class="ghost" data-filter="done">已完成</button>
-        </div>
-        <div id="taskList"><div class="empty">加载中……</div></div>
-      </section>
-    </main>
+  <!-- 待办 -->
+  <section class="card tabpane active" id="pane-tasks">
+    <h2>⭐ 今日重点</h2>
+    <div id="starredList"><div class="empty">加载中……</div></div>
+    <h2 style="margin-top:20px">待办事项</h2>
+    <div class="add-row">
+      <input type="text" id="newTitle" placeholder="输入待办，例如：回复 Sam 的报价">
+      <select id="newPriority">
+        <option value="medium">中优先级</option>
+        <option value="high">高优先级</option>
+        <option value="low">低优先级</option>
+      </select>
+      <input type="date" id="newDue" aria-label="截止日期">
+      <button id="addBtn">添加</button>
+    </div>
+    <div class="filters">
+      <button class="ghost active" data-filter="all">全部</button>
+      <button class="ghost" data-filter="active">未完成</button>
+      <button class="ghost" data-filter="done">已完成</button>
+    </div>
+    <div id="taskList"><div class="empty">加载中……</div></div>
+  </section>
 
-    <aside>
-      <section class="card timer">
+  <!-- 询盘 -->
+  <section class="card tabpane" id="pane-inquiries">
+    <h2>💬 询盘管理</h2>
+    <div class="toolbar">
+      <input type="search" id="search-inquiries" placeholder="搜索客人 / 产品…">
+      <select id="filter-inquiries"><option value="">全部状态</option><option>待报价</option><option>已报价</option><option>跟进中</option><option>已成交</option><option>已丢单</option></select>
+      <button class="ghost" data-export="inquiries">导出 CSV</button>
+    </div>
+    <div class="add-row form-grid" id="form-inquiries">
+      <input type="text" data-f="customer" placeholder="客人姓名 / 公司 *">
+      <input type="text" data-f="product" placeholder="产品 *">
+      <input type="text" data-f="quantity" placeholder="数量，如 500 pcs">
+      <select data-f="status"><option>待报价</option><option>已报价</option><option>跟进中</option><option>已成交</option><option>已丢单</option></select>
+      <input type="date" data-f="inquiry_date" aria-label="询盘日期">
+      <input type="text" data-f="followup" placeholder="跟进记录">
+      <button data-save="inquiries">添加询盘</button>
+      <button class="ghost hidden" data-cancel="inquiries">取消编辑</button>
+    </div>
+    <div id="list-inquiries" class="mod-list"><div class="empty">加载中……</div></div>
+  </section>
+
+  <!-- 供应商 -->
+  <section class="card tabpane" id="pane-suppliers">
+    <h2>🏭 供应商</h2>
+    <div class="toolbar">
+      <input type="search" id="search-suppliers" placeholder="搜索供应商 / 产品…">
+      <button class="ghost" data-export="suppliers">导出 CSV</button>
+    </div>
+    <div class="add-row form-grid" id="form-suppliers">
+      <input type="text" data-f="name" placeholder="供应商名 *">
+      <input type="text" data-f="product" placeholder="产品">
+      <input type="text" data-f="price" placeholder="价格，如 $12.50 / pcs">
+      <input type="text" data-f="moq" placeholder="起订量 MOQ，如 1000">
+      <input type="text" data-f="contact" placeholder="联系人">
+      <input type="text" data-f="phone" placeholder="联系方式（微信 / 电话 / 邮箱）">
+      <button data-save="suppliers">添加供应商</button>
+      <button class="ghost hidden" data-cancel="suppliers">取消编辑</button>
+    </div>
+    <div id="list-suppliers" class="mod-list"><div class="empty">加载中……</div></div>
+  </section>
+
+  <!-- SEO -->
+  <section class="card tabpane" id="pane-seo">
+    <h2>🔍 SEO 进度</h2>
+    <div class="toolbar">
+      <input type="search" id="search-seo" placeholder="搜索关键词 / 页面…">
+      <select id="filter-seo"><option value="">全部状态</option><option>待写</option><option>写作中</option><option>已发布</option><option>已收录</option></select>
+      <button class="ghost" data-export="seo">导出 CSV</button>
+    </div>
+    <div class="add-row form-grid" id="form-seo">
+      <input type="text" data-f="keyword" placeholder="关键词 *">
+      <input type="text" data-f="rank" placeholder="当前排名，如 12">
+      <input type="text" data-f="target_rank" placeholder="目标排名，如 前 3">
+      <input type="text" data-f="page" placeholder="文章 / 页面">
+      <select data-f="status"><option>待写</option><option>写作中</option><option>已发布</option><option>已收录</option></select>
+      <input type="date" data-f="updated_date" aria-label="更新日期">
+      <button data-save="seo">添加关键词</button>
+      <button class="ghost hidden" data-cancel="seo">取消编辑</button>
+    </div>
+    <div id="list-seo" class="mod-list"><div class="empty">加载中……</div></div>
+  </section>
+
+  <!-- 订单 / PI -->
+  <section class="card tabpane" id="pane-orders">
+    <h2>🧾 订单 / PI</h2>
+    <div class="toolbar">
+      <input type="search" id="search-orders" placeholder="搜索订单号 / 客人 / PI 号…">
+      <select id="filter-orders"><option value="">全部付款状态</option><option>未付</option><option>定金</option><option>已付清</option></select>
+      <button class="ghost" data-export="orders">导出 CSV</button>
+    </div>
+    <div class="add-row form-grid" id="form-orders">
+      <input type="text" data-f="order_no" placeholder="订单号 *">
+      <input type="text" data-f="customer" placeholder="客人">
+      <input type="text" data-f="supplier" placeholder="供应商">
+      <input type="text" data-f="product" placeholder="产品">
+      <input type="text" data-f="amount" placeholder="金额，如 9325">
+      <select data-f="currency"><option>USD</option><option>CNY</option><option>EUR</option></select>
+      <input type="text" data-f="pi_no" placeholder="PI 号">
+      <select data-f="pay_status"><option>未付</option><option>定金</option><option>已付清</option></select>
+      <select data-f="progress"><option>待生产</option><option>生产中</option><option>已完成</option></select>
+      <button data-save="orders">添加订单</button>
+      <button class="ghost hidden" data-cancel="orders">取消编辑</button>
+    </div>
+    <div id="list-orders" class="mod-list"><div class="empty">加载中……</div></div>
+  </section>
+
+  <!-- 发货 -->
+  <section class="card tabpane" id="pane-shipments">
+    <h2>📦 发货</h2>
+    <div class="toolbar">
+      <input type="search" id="search-shipments" placeholder="搜索客人 / 订单号 / 快递单号…">
+      <select id="filter-shipments"><option value="">全部状态</option><option>已发货</option><option>运输中</option><option>已签收</option></select>
+      <button class="ghost" data-export="shipments">导出 CSV</button>
+    </div>
+    <div class="add-row form-grid" id="form-shipments">
+      <input type="text" data-f="customer" placeholder="客人 *">
+      <input type="text" data-f="order_no" placeholder="订单号">
+      <input type="text" data-f="carrier" placeholder="快递公司，如 DHL">
+      <input type="text" data-f="tracking" placeholder="快递单号">
+      <input type="date" data-f="ship_date" aria-label="发货日期">
+      <select data-f="status"><option>已发货</option><option>运输中</option><option>已签收</option></select>
+      <input type="text" data-f="note" placeholder="备注">
+      <button data-save="shipments">添加发货</button>
+      <button class="ghost hidden" data-cancel="shipments">取消编辑</button>
+    </div>
+    <div id="list-shipments" class="mod-list"><div class="empty">加载中……</div></div>
+  </section>
+
+  <!-- 工具 -->
+  <section class="card tabpane" id="pane-tools">
+    <h2>🛠 工具：备份 / 导出 / 番茄钟</h2>
+    <div class="tool-row">
+      <button id="exportJsonBtn">备份全部数据（导出 JSON）</button>
+      <button class="ghost" id="exportAllCsvBtn">导出全部模块 CSV</button>
+      <label class="import-label">导入 JSON 备份
+        <input type="file" id="importJsonFile" accept="application/json" class="hidden">
+      </label>
+    </div>
+    <p class="muted">JSON 备份包含全部 8 张表的数据；导入时会按表逐条新增（不覆盖、不删除已有数据）。每个模块页面上方也有单独的「导出 CSV」按钮，CSV 带 UTF-8 BOM，Excel 打开中文不会乱码。</p>
+
+    <div class="grid" style="margin-top:16px">
+      <div>
         <h2>🍅 番茄钟</h2>
-        <div class="timer-display" id="timerDisplay">25:00</div>
-        <div class="timer-btns">
-          <button class="ghost active" data-minutes="25">25 分钟</button>
-          <button class="ghost" data-minutes="15">15 分钟</button>
-          <button class="ghost" data-minutes="5">5 分钟</button>
+        <div class="timer">
+          <div class="timer-display" id="timerDisplay">25:00</div>
+          <div class="timer-btns">
+            <button class="ghost active" data-minutes="25">25 分钟</button>
+            <button class="ghost" data-minutes="15">15 分钟</button>
+            <button class="ghost" data-minutes="5">5 分钟</button>
+          </div>
+          <div class="timer-btns" style="margin-top:10px">
+            <button id="timerToggle">开始</button>
+            <button class="ghost" id="timerReset">重置</button>
+          </div>
         </div>
-        <div class="timer-btns" style="margin-top:10px">
-          <button id="timerToggle">开始</button>
-          <button class="ghost" id="timerReset">重置</button>
-        </div>
-      </section>
-
-      <section class="card">
+      </div>
+      <div>
         <h2>📝 速记</h2>
         <textarea id="notes" placeholder="随手记点什么，点保存会同步到 Supabase……"></textarea>
         <div style="margin-top:10px;text-align:right"><button id="saveNotesBtn">保存速记</button></div>
-      </section>
-
-      <section class="card">
-        <h2>🔗 常用链接</h2>
+        <h2 style="margin-top:20px">🔗 常用链接</h2>
         <div class="add-row">
           <input type="text" id="linkTitle" placeholder="名称">
           <input type="text" id="linkUrl" placeholder="网址，如 github.com">
           <button id="addLinkBtn">添加</button>
         </div>
         <div id="linkList" style="margin-top:8px"><div class="empty">加载中……</div></div>
-      </section>
-    </aside>
-  </div>
+      </div>
+    </div>
+  </section>
 </div>
 <script src="app.js"></script>
 </body>
