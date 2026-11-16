@@ -619,7 +619,7 @@ function renderTasks() {
     })
   })).filter(g => g.rows.length);
   el.innerHTML = groups.map(g =>
-    '<div class="time-group' + (g.key === 'overdue' ? ' overdue' : '') + '">' +
+    '<div class="time-group' + (g.key === 'overdue' ? ' overdue' : g.key === 'today' ? ' today' : '') + '">' +
     '<h3 class="time-group-title">' + g.icon + ' ' + g.label + '（' + g.rows.length + '）</h3>' +
     g.rows.map(taskRowHtml).join('') +
     '</div>'
