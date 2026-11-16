@@ -144,6 +144,9 @@ textarea{width:100%;min-height:130px;resize:vertical}
 .qg-pink h3{color:#be185d}
 .qg-pink .quick-card{border-left-color:var(--pink)}
 .qg-pink .quick-card:hover{background:#fdf2f8}
+.qg-teal h3{color:#0f766e}
+.qg-teal .quick-card{border-left-color:#14b8a6}
+.qg-teal .quick-card:hover{background:#f0fdfa}
 @media(max-width:820px){.quick-groups{grid-template-columns:1fr}}
 /* 打印导出（PDF）用的打印区：平时隐藏，点“导出 PDF”时才显示 */
 #print-area{display:none}
