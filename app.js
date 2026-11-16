@@ -1,4 +1,4 @@
-// 工作面板 v2 - Vercel + Supabase 版
+// 潜水料工作面板 v2 - Vercel + Supabase 版
 // 关键修复：v1 用外部 @supabase/supabase-js CDN，CDN 一卡页面就永远停在“加载中”。
 // v2 不依赖任何外部 JS 库，直接用 fetch() 调 Supabase REST API，
 // 每次请求 10 秒超时，失败会在对应列表里显示错误，不会无限挂起。
@@ -420,7 +420,7 @@ function exportModuleCsv(mod) {
 // 导出 .xls 表格版（HTML 表格存为 .xls，Excel 可直接打开；也是 Excel 组件加载失败时的兜底）
 function exportToXls(key) {
   const spec = exportSpec(key);
-  const html = buildXlsHtml('工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
+  const html = buildXlsHtml('潜水料工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
   downloadBlob(spec.title + '-' + fileDate() + '.xls', new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' }));
   setStatus('已导出 .xls 表格版：' + spec.title + '（Excel 可直接打开），共 ' + spec.rows.length + ' 条。');
 }
@@ -466,7 +466,7 @@ async function exportToXlsx(key) {
 // 导出 Word（.doc，HTML 表格，Word 原生支持打开，UTF-8 中文不乱码）
 function exportToDoc(key) {
   const spec = exportSpec(key);
-  const html = buildDocHtml('工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
+  const html = buildDocHtml('潜水料工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
   downloadBlob(spec.title + '-' + fileDate() + '.doc', new Blob(['\ufeff' + html], { type: 'application/msword;charset=utf-8' }));
   setStatus('已导出 Word（.doc）：' + spec.title + '，共 ' + spec.rows.length + ' 条。');
 }
@@ -485,7 +485,7 @@ function printSections(title, sections) {
 }
 function exportToPdf(key) {
   const spec = exportSpec(key);
-  printSections('工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
+  printSections('潜水料工作面板 - ' + spec.title, [{ heading: spec.title, columns: spec.columns, rows: spec.rows }]);
 }
 
 // 按格式分发单个模块的导出（format 为空时默认 CSV，兼容旧的 data-export 用法）
@@ -514,21 +514,21 @@ async function exportAllXlsx() {
     setStatus('已导出全部数据 Excel（.xlsx），共 ' + specs.length + ' 个工作表。');
   } catch (e) {
     setStatus('Excel 组件加载失败（' + e.message + '），已自动改为下载全部数据 .xls 表格版，Excel 可直接打开。', true);
-    const html = buildXlsHtml('工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
+    const html = buildXlsHtml('潜水料工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
     downloadBlob('work-panel-全部数据-' + fileDate() + '.xls', new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' }));
   }
 }
 // 全部数据导出一个 Word（.doc），每模块一段表格
 function exportAllDoc() {
   const specs = allExportSpecs();
-  const html = buildDocHtml('工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
+  const html = buildDocHtml('潜水料工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
   downloadBlob('work-panel-全部数据-' + fileDate() + '.doc', new Blob(['\ufeff' + html], { type: 'application/msword;charset=utf-8' }));
   setStatus('已导出全部数据 Word（.doc），共 ' + specs.length + ' 个模块。');
 }
 // 全部数据导出 PDF（打印保存）：一次打印全部模块的表格
 function exportAllPdf() {
   const specs = allExportSpecs();
-  printSections('工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
+  printSections('潜水料工作面板 - 全部数据', specs.map(s => ({ heading: s.title, columns: s.columns, rows: s.rows })));
 }
 
 // 全局事件委托：模块的保存 / 取消 / 编辑 / 删除 / 导出 / 重试 / 搜索 / 筛选
